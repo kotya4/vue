@@ -29,7 +29,8 @@ export default {
 
 <style lang="sass">
 
-#app
+body
   font-family: monospace
+  margin: 0
 
 </style>
