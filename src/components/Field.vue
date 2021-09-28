@@ -37,11 +37,11 @@ export default {
     owner: String,
     state: String,
   },
-  emits: [ 'status' ],
+  emits: [ 'push_state' ],
   data () {
 
-    // const boats = [ 0, 4, 2, 2, 1 ] // first value must be 0, other values are number of available boats for each boat-length a.k.a index
-    const boats = [ 0, 1 ]
+    const boats = [ 0, 4, 2, 2, 1 ] // first value must be 0, other values are number of available boats for each boat-length a.k.a index
+    // const boats = [ 0, 1 ]
 
     let map = Array ( this.h ) .fill () .map ( () => Array ( this.w ) .fill ( 0 ) )
 
@@ -63,6 +63,13 @@ export default {
 
       linked_map,
 
+      // enemy hit state indicates whether enemy need to
+      // hit neighbour cell or random one according to last hit state
+      // null -- random cell
+      // array -- neighbour cell ( array contains position of last hit )
+      // used only by human field in watch->state
+      enemy_neighbour_guess: null,
+
     }
   },
   computed: {
@@ -75,7 +82,13 @@ export default {
 
     field_wrapper_class () {
 
-      return { 'field-wrapper--disabled': ! this.is_human && this.state === 'placing' || this.is_human && this.state === 'blowing' }
+      const a = this.is_human && this.state === 'user:hiting'
+      const b = ! this.is_human && this.state === 'user:placing'
+      const c = ! this.is_human && this.state === 'enemy:hiting'
+
+      console.log ( a, b, c )
+
+      return { 'field-wrapper--disabled': a || b || c }
 
     },
 
@@ -86,38 +99,116 @@ export default {
     },
 
   },
+  watch: {
+
+    state ( state ) {
+
+      if ( this.is_human && state === 'enemy:continue' ) {
+        // on each enemy hit, state must be changed from 'hiting' to 'continue' and 'hiting'
+        // again because vue runs current method only if property's new value isn't equal to old value.
+        return this.$emit ( 'push_state', 8 )
+      }
+
+      if ( this.is_human && state === 'enemy:hiting' ) setTimeout ( () => {
+
+        let x = null
+        let y = null
+        let unhit_cell_found = false
+
+        if ( null !== this.enemy_neighbour_guess ) {
+          // dumpy neighbour guess
+
+          [ x, y ] = this.enemy_neighbour_guess
+
+          const neighbours = [
+            [ x    , y + 1 ],
+            [ x    , y - 1 ],
+            [ x + 1, y     ],
+            [ x - 1, y     ],
+          ]
+
+          const i = Math.random () * neighbours.length | 0
+
+          for ( let k = 0; k < neighbours.length; ++k ) {
+            const t = ( k + i ) % neighbours.length
+            ;
+            [ x, y ] = neighbours[ t ]
+            if ( x < 0 || x >= this.map[ 0 ].length || y < 0 || y >= this.map.length )
+              continue
+            if ( this.map[ y ][ x ] >= 0 ) {
+              unhit_cell_found = true
+              break
+            }
+          }
+
+        }
+
+        if ( ! unhit_cell_found ) {
+          // random guess
+
+          const size = this.map.length * this.map[ 0 ].length
+          const i = size * Math.random () | 0
+
+          for ( let k = 0; k < size; ++k ) {
+            const t = ( k + i ) % size
+            x = t % this.map[ 0 ].length
+            y = t / this.map[ 0 ].length | 0
+            if ( this.map[ y ][ x ] >= 0 ) {
+              unhit_cell_found = true
+              break
+            }
+          }
+
+        }
+
+        if ( unhit_cell_found ) {
+
+          const metadata = { boat_is_dead: false }
+          const status = [ -8, 6, 7, 5 ][ this.blow_boat ( x, y, metadata ) ]
+          this.enemy_neighbour_guess = ( status === 5 && ! metadata.boat_is_dead ) ? [ x, y ] : null
+          return setTimeout ( () => this.$emit ( 'push_state', status ), 1000 )
+
+        }
+
+        // unhit cell not found
+        return this.$emit ( 'push_state', -7 )
+      }, 1000 )
+
+    }
+
+  },
   methods: {
 
     click ( x, y ) {
       // Emits action status to the parent
 
-      if ( this.state === 'placing' ) {
+      if ( this.state === 'user:placing' ) {
         if ( this.is_human ) {
           const status = this.place_boat ( x, y )
-          return this.$emit ( 'status', status )
+          return this.$emit ( 'push_state', status )
         }
       }
 
-      else if ( this.state === 'blowing' ) {
+      else if ( this.state === 'user:hiting' ) {
         if ( ! this.is_human ) {
-          const status = this.blow_boat ( x, y )
-          return this.$emit ( 'status', status )
+          const status = [ -6, 2, 4, 3 ][ this.blow_boat ( x, y ) ]
+          return this.$emit ( 'push_state', status )
         }
       }
 
     },
 
-    blow_boat ( x, y ) {
+    blow_boat ( x, y, o={} ) {
 
       if ( this.map[ y ][ x ] < 0 ) {
         // try again
-        return -6
+        return 0
       }
 
       if ( this.map[ y ][ x ] === 0 ) {
         // miss
         this.map[ y ][ x ] = -1
-        return 2
+        return 1
       }
 
       // hit
@@ -137,6 +228,8 @@ export default {
               if ( ! out_of_range ( x + i, y + k ) )
                 this.map[ y + k ][ x + i ] = -1
 
+          // metadata for computer, see watch->state
+          o.boat_is_dead = true
         }
 
         // decrese boats number
@@ -144,11 +237,12 @@ export default {
 
         if ( this.cells.every ( e => e === 0 ) ) {
           // all boats are blowed up, game over
-          return 4
+          return 2
         }
 
       }
 
+      // hit! try again
       return 3
 
     },
@@ -197,8 +291,10 @@ export default {
     blowed ( boat ) {
       // Used to show only blowed up boats ( blowed up boat is negative )
 
-      return boat < 0 ? boat : 0
+      // return boat < 0 ? boat : 0
+      return boat
 
+      // you can return 'boat' to make enemy boats visible
     },
 
     build_linked_map ( map ) {
@@ -206,7 +302,7 @@ export default {
       // map -- array of array of cells ( integers )
 
       const at = ( x, y ) =>
-        ( x < 0 || x >= this.w || y < 0 || y >= this.h ) ? 0 : map[ y ][ x ]
+        ( x < 0 || x >= map[ 0 ].length || y < 0 || y >= map.length ) ? 0 : map[ y ][ x ]
 
       const linked_map = map.map ( e => e.map ( () => null ) )
 
@@ -215,10 +311,10 @@ export default {
         linked_map[ y ][ x ] = a // set link to the map
         a.push ( [ x, y ] ) // append position
         ;
-        [ [ x + 1, y + 0 ]
-        , [ x - 1, y + 0 ]
-        , [ x + 0, y + 1 ]
-        , [ x + 0, y - 1 ]
+        [ [ x + 1, y     ]
+        , [ x - 1, y     ]
+        , [ x    , y + 1 ]
+        , [ x    , y - 1 ]
         ].forEach ( ( [ x, y ] ) => at ( x, y ) && link ( a, x, y ) ) // do same thing to all neighbours
       }
 
@@ -235,9 +331,50 @@ export default {
       // map   -- array of array of initial cell values ( zeros )
       // boats -- array of available boats
 
-      boats;
+      const at = ( x, y ) =>
+        ( x < 0 || x >= map[ 0 ].length || y < 0 || y >= map.length ) ? 0 : map[ y ][ x ]
 
-      map[ 3 ][ 3 ] = 1
+      boats.forEach ( ( num, i ) => {
+
+        const size = i
+
+        let inf = 0 // free space can be not found, to avoid infinite cycle additional counter used.
+        const maxinf = 0xfff
+        for ( let k = 0; k < num && inf < maxinf; ++k, ++inf ) {
+
+          const dx = Math.random () * 2 | 0
+          const dy = dx ? 0 : 1
+          const y = Math.random () * ( map.length - size * dy ) | 0
+          const x = Math.random () * ( map[ 0 ].length - size * dx ) | 0
+
+          let space_is_free = true
+          for ( let t = 0; t < size; ++t )
+            if ( at ( x + t * dx    , y + t * dy     )
+            ||   at ( x + t * dx + 1, y + t * dy     )
+            ||   at ( x + t * dx    , y + t * dy + 1 )
+            ||   at ( x + t * dx + 1, y + t * dy + 1 )
+            ||   at ( x + t * dx - 1, y + t * dy     )
+            ||   at ( x + t * dx    , y + t * dy - 1 )
+            ||   at ( x + t * dx + 1, y + t * dy - 1 )
+            ||   at ( x + t * dx - 1, y + t * dy + 1 )
+            ||   at ( x + t * dx - 1, y + t * dy - 1 ) )
+          {
+            space_is_free = false
+            break
+          }
+
+          if ( space_is_free )
+            for ( let t = 0; t < size; ++t )
+              map[ y + t * dy ][ x + t * dx ] = size
+
+          else
+            -- k
+
+        }
+
+        if ( inf >= maxinf ) console.log ( 'inf' )
+
+      } )
 
       return map
     }

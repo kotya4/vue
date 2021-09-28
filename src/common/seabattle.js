@@ -5,11 +5,11 @@ function place_boat ( x, y, at, put, maxlen ) {
   // put    -- function putting cell at position
   // maxlen -- max boat-length
 
-  const ml = at ( x - 1, y + 0 ) // middle-left
-  const mr = at ( x + 1, y + 0 ) // middle-right
-  const tm = at ( x + 0, y - 1 ) // top-middle
-  const bm = at ( x + 0, y + 1 ) // bottom-middle
-  const mm = at ( x + 0, y + 0 ) // middle-middle
+  const ml = at ( x - 1, y     ) // middle-left
+  const mr = at ( x + 1, y     ) // middle-right
+  const tm = at ( x    , y - 1 ) // top-middle
+  const bm = at ( x    , y + 1 ) // bottom-middle
+  const mm = at ( x    , y     ) // middle-middle
   const tl = at ( x - 1, y - 1 ) // top-left
   const tr = at ( x + 1, y - 1 ) // top-right
   const bl = at ( x - 1, y + 1 ) // bottom-left
