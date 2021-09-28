@@ -41,7 +41,6 @@ export default {
   data () {
 
     const boats = [ 0, 4, 2, 2, 1 ] // first value must be 0, other values are number of available boats for each boat-length a.k.a index
-    // const boats = [ 0, 1 ]
 
     let map = Array ( this.h ) .fill () .map ( () => Array ( this.w ) .fill ( 0 ) )
 
@@ -85,8 +84,6 @@ export default {
       const a = this.is_human && this.state === 'user:hiting'
       const b = ! this.is_human && this.state === 'user:placing'
       const c = ! this.is_human && this.state === 'enemy:hiting'
-
-      console.log ( a, b, c )
 
       return { 'field-wrapper--disabled': a || b || c }
 
@@ -291,8 +288,7 @@ export default {
     blowed ( boat ) {
       // Used to show only blowed up boats ( blowed up boat is negative )
 
-      // return boat < 0 ? boat : 0
-      return boat
+      return boat < 0 ? boat : 0
 
       // you can return 'boat' to make enemy boats visible
     },

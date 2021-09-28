@@ -39,9 +39,6 @@ export default {
   margin: 1px
   position: relative
 
-  &:hover
-    border: 1px solid blue
-
   &--crossed
 
     &:before, &:after
